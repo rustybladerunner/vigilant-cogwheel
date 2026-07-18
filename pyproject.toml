@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "ministral-finetuner"
 version = "0.1.0"
 description = "A framework for fine-tuning Ministral-3B models locally"
-authors = [{name = "Your Name", email = "your.email@example.com"}]
+authors = [{name = "rustybladerunner", email = "176958705+rustybladerunner@users.noreply.github.com"}]
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
