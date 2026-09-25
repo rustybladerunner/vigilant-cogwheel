@@ -8,8 +8,6 @@ from rich.table import Table
 
 from ministral_finetuner.config import ConfigManager, TrainingConfig
 from ministral_finetuner.dataset import load_dataset_with_quality
-from ministral_finetuner.model import MinistralModel
-from ministral_finetuner.trainer import MinistralTrainer
 
 console = Console()
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -18,9 +16,10 @@ logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description="Fine-tune Ministral-3B locally")
+    parser.add_argument("--validate-only", action="store_true", help="Check local data without loading a model or training")
     parser.add_argument("--config", type=str, help="Path to config YAML file")
     parser.add_argument("--dataset", type=str, required=True, help="Path to dataset JSONL file")
-    parser.add_argument("--output-dir", type=str, default="ministral-3b-finetuned")
+    parser.add_argument("--output-dir", type=str)
     parser.add_argument("--model-name", type=str, help="Base model name (e.g., mistralai/Ministral-3B-Instruct-2410 or mistralai/Mistral-7B-Instruct-v0.3)")
     parser.add_argument("--enable-annealing", action="store_true", help="Enable self-annealing dataset pipeline")
     parser.add_argument("--anneal-cycles", type=int, help="Number of annealing cycles")
@@ -48,7 +47,8 @@ def main():
 
     # Override with command line args
     config.dataset_path = args.dataset
-    config.output_dir = args.output_dir
+    if args.output_dir:
+        config.output_dir = args.output_dir
     config.local_cache_dir = args.dataset_cache_dir or config.local_cache_dir
     if args.model_name:
         config.model_name = args.model_name
@@ -105,9 +105,18 @@ def main():
             console.print(table)
         console.print(f"[green]Dataset ready with {len(dataset)} samples[/green]")
 
+        console.print("[yellow]Scores are text heuristics. Toxicity is not assessed; data is not safety-cleared.[/yellow]")
+        if args.validate_only:
+            console.print("Validation complete. No model was loaded or trained.")
+            return
+
+        # Import Unsloth before TRL; validation does not need GPU dependencies.
+        from ministral_finetuner.model import MinistralModel
+        from ministral_finetuner.trainer import MinistralTrainer
+
         # Setup model
         model_manager = MinistralModel(config.model_name)
-        model, tokenizer = model_manager.load_model()
+        model, tokenizer = model_manager.load_model(max_seq_length=config.max_seq_length)
         model = model_manager.add_lora_adapters(r=config.lora_rank)
 
         # Train

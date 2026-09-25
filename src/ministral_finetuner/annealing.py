@@ -55,9 +55,10 @@ class AnnealingLoop:
             coherence_ok = metrics.get("coherence", 0) + slack >= thresholds.min_coherence
             diversity_ok = metrics.get("diversity", 0) + slack >= thresholds.min_diversity
             repetition_ok = metrics.get("repetition", 1) <= thresholds.max_repetition + slack
-            toxicity_ok = metrics.get("toxicity", 0) <= thresholds.toxicity_threshold + slack
-            bias_ok = metrics.get("bias", 0) <= thresholds.bias_threshold + slack
-            accepted = all([length_ok, user_ok, coherence_ok, diversity_ok, repetition_ok, toxicity_ok, bias_ok])
+            # No toxicity detector exists. This filter cannot establish safety.
+            bias = metrics.get("bias")
+            bias_ok = bias is None or bias <= thresholds.bias_threshold + slack
+            accepted = all([length_ok, user_ok, coherence_ok, diversity_ok, repetition_ok, bias_ok])
             if not accepted:
                 for flag in example.get("quality_flags", []):
                     removed_flags[flag] = removed_flags.get(flag, 0) + 1

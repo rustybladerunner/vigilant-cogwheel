@@ -1,0 +1,9 @@
+# Small starting configuration, not a measured hardware-fit guarantee.
+max_steps: 5
+batch_size: 1
+lora_rank: 16
+max_seq_length: 2048
+save_gguf: false
+output_dir: ministral-3b-finetuned-smoke
+fp16: true
+bf16: false

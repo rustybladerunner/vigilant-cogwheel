@@ -11,7 +11,7 @@ class QualityThresholds:
     min_coherence: float = 0.4
     min_diversity: float = 0.3
     max_repetition: float = 0.4
-    toxicity_threshold: float = 0.5
+    toxicity_threshold: float = 0.5  # Legacy setting; no toxicity detector is implemented.
     bias_threshold: float = 0.4
 
 @dataclass
@@ -46,11 +46,13 @@ class TrainingConfig:
     dataset_path: str = "my_dataset.jsonl"
     output_dir: str = "ministral-3b-finetuned"
     max_steps: int = 500
-    batch_size: int = 16
+    batch_size: int = 1
     learning_rate: float = 2e-4
-    lora_rank: int = 128
-    max_seq_length: int = 32768
-    save_gguf: bool = True
+    lora_rank: int = 16
+    max_seq_length: int = 2048
+    fp16: bool = True
+    bf16: bool = False
+    save_gguf: bool = False
     quantization_method: str = "q5_k_m"
     local_cache_dir: str = "cache/datasets"
     annealing: AnnealingSettings = field(default_factory=AnnealingSettings)

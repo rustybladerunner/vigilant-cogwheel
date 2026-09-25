@@ -5,3 +5,11 @@ __pycache__/
 dist/
 build/
 
+
+.pytest_cache/
+*.egg-info/
+cache/
+ministral-3b-finetuned*/
+*.safetensors
+*.gguf
+.env

@@ -10,46 +10,27 @@ if TYPE_CHECKING:
 class DatasetLoader:
     @staticmethod
     def load_jsonl(path: str) -> Dataset:
-        """Load dataset from JSONL file in Alpaca/ShareGPT format"""
+        """Load local JSONL records containing role/content messages."""
         return load_dataset("json", data_files=path, split="train")
-    
+
     @staticmethod
     def validate_format(dataset: Dataset) -> bool:
-        """Validate that dataset follows expected message format"""
-        sample = dataset[0]
-        if "messages" not in sample:
+        """Check every conversation before scoring or loading a model."""
+        if len(dataset) == 0:
             return False
-        
-        messages = sample["messages"]
-        if not isinstance(messages, list):
-            return False
-            
-        for msg in messages:
-            if not all(key in msg for key in ["role", "content"]):
+        for sample in dataset:
+            messages = sample.get("messages")
+            if not isinstance(messages, list) or not messages:
                 return False
-            if msg["role"] not in ["user", "assistant", "system"]:
+            for msg in messages:
+                if not isinstance(msg, dict) or msg.get("role") not in ("system", "user", "assistant"):
+                    return False
+                if not isinstance(msg.get("content"), str) or not msg["content"].strip():
+                    return False
+            roles = {msg["role"] for msg in messages}
+            if not {"user", "assistant"}.issubset(roles):
                 return False
-        
         return True
-    
-    @staticmethod
-    def convert_to_text_format(dataset: Dataset) -> Dataset:
-        """Convert message format to text format for training"""
-        def format_conversation(example):
-            conversation = example["messages"]
-            formatted_text = ""
-            
-            for msg in conversation:
-                role = msg["role"]
-                content = msg["content"]
-                if role == "user":
-                    formatted_text += f"User: {content}\n"
-                elif role == "assistant":
-                    formatted_text += f"Assistant: {content}\n"
-            
-            return {"text": formatted_text.strip()}
-        
-        return dataset.map(format_conversation)
 
 
 class QualityScorer:
@@ -87,13 +68,13 @@ class QualityScorer:
         most_common = freq.most_common(1)[0][1]
         return most_common / len(tokens)
 
-    def _toxicity_stub(self, text: str) -> float:
-        """Placeholder toxicity model; always returns low score."""
-        return 0.0
+    def _toxicity_stub(self, text: str) -> Optional[float]:
+        """No toxicity detector is implemented; unknown is not a zero score."""
+        return None
 
-    def _bias_stub(self, text: str) -> float:
+    def _bias_stub(self, text: str) -> Optional[float]:
         if not self.enable_bias or not self.bias_terms:
-            return 0.0
+            return None
         lower_text = text.lower()
         hits = sum(1 for term in self.bias_terms if term in lower_text)
         return hits / max(len(self.bias_terms), 1)
@@ -133,9 +114,7 @@ class QualityScorer:
             + 0.2 * diversity
             + 0.15 * (1 - repetition)
             + 0.1 * structural_score
-            + 0.15 * (1 - toxicity)
-            + 0.15 * (1 - bias)
-        )
+        ) / 0.7  # Text heuristics only; no unmeasured safety credit.
 
         flags = []
         t = self.thresholds
@@ -149,9 +128,7 @@ class QualityScorer:
             flags.append("diversity")
         if repetition > t.max_repetition:
             flags.append("repetition")
-        if toxicity > t.toxicity_threshold:
-            flags.append("toxicity")
-        if bias > t.bias_threshold:
+        if bias is not None and bias > t.bias_threshold:
             flags.append("bias")
 
         passes = len(flags) == 0
@@ -161,6 +138,7 @@ class QualityScorer:
             "diversity": diversity,
             "repetition": repetition,
             "toxicity": toxicity,
+            "safety_checked": False,
             "bias": bias,
             "user_ratio": user_ratio,
             "length": float(length),
@@ -185,6 +163,7 @@ class QualityScorer:
                     **metrics["structural"],
                 },
                 "quality_pass": metrics["passes"],
+                "safety_checked": False,
                 "quality_flags": metrics["flags"],
             })
             return example
@@ -220,5 +199,7 @@ def load_dataset_with_quality(dataset_path: str, config: "TrainingConfig"):
         )
         dataset, annealing_history = loop.run(dataset)
 
-    dataset = DatasetLoader.convert_to_text_format(dataset)
+    if len(dataset) == 0:
+        raise ValueError("No samples remain after dataset filtering.")
+    # Keep messages intact. TRL applies the selected tokenizer's chat template.
     return dataset, annealing_history
